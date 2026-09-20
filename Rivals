@@ -1,0 +1,419 @@
+--==================================================
+-- MOBILE AIM ASSIST (REVISED)
+-- LocalScript -> StarterPlayer > StarterPlayerScripts
+--==================================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+--==================================================
+-- SETTINGS
+--==================================================
+
+local Settings = {
+	Enabled = false,
+
+	FOV = 80,
+	AimStrength = 500, -- Scaled down for smooth delta rotation
+
+	WallCheck = true,
+	DeadCheck = true,
+	TeamCheck = true,
+
+	MaxDistance = 500,
+	TargetPart = "Head",
+
+	ToggleKey = Enum.KeyCode.Q,
+}
+
+--==================================================
+-- GUI SETUP (COMPACT MOBILE DESIGN)
+--==================================================
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "MobileAimAssistCompact"
+Gui.ResetOnSpawn = false
+Gui.IgnoreGuiInset = true
+Gui.Parent = PlayerGui
+
+-- Toggle Button (Floating Icon)
+local GuiToggle = Instance.new("TextButton")
+GuiToggle.Name = "GuiToggle"
+GuiToggle.Size = UDim2.fromOffset(32, 32)
+GuiToggle.Position = UDim2.new(0, 15, 0.4, 0)
+GuiToggle.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+GuiToggle.BorderSizePixel = 0
+GuiToggle.Text = "🎯"
+GuiToggle.TextSize = 14
+GuiToggle.Parent = Gui
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 8)
+ToggleCorner.Parent = GuiToggle
+
+local ToggleStroke = Instance.new("UIStroke")
+ToggleStroke.Color = Color3.fromRGB(60, 60, 75)
+ToggleStroke.Thickness = 1
+ToggleStroke.Parent = GuiToggle
+
+-- Main Panel (Compact dimensions: 160x180)
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.fromOffset(160, 185)
+Main.Position = UDim2.new(0, 55, 0.4, -90)
+Main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+Main.BorderSizePixel = 0
+Main.Visible = true
+Main.Parent = Gui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = Main
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = Color3.fromRGB(45, 45, 55)
+MainStroke.Thickness = 1
+MainStroke.Parent = Main
+
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -16, 0, 22)
+Title.Position = UDim2.fromOffset(8, 4)
+Title.BackgroundTransparency = 1
+Title.Text = "Aim Assist"
+Title.TextColor3 = Color3.fromRGB(240, 240, 245)
+Title.TextSize = 11
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Main
+
+-- Main Enable Button
+local AimButton = Instance.new("TextButton")
+AimButton.Size = UDim2.new(1, -16, 0, 22)
+AimButton.Position = UDim2.fromOffset(8, 28)
+AimButton.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+AimButton.BorderSizePixel = 0
+AimButton.Text = "OFF"
+AimButton.TextColor3 = Color3.fromRGB(180, 180, 190)
+AimButton.TextSize = 9
+AimButton.Font = Enum.Font.GothamBold
+AimButton.Parent = Main
+
+local AimCorner = Instance.new("UICorner")
+AimCorner.CornerRadius = UDim.new(0, 4)
+AimCorner.Parent = AimButton
+
+-- Scrolling Container
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.Size = UDim2.new(1, -8, 1, -56)
+Scroll.Position = UDim2.fromOffset(4, 54)
+Scroll.BackgroundTransparency = 1
+Scroll.BorderSizePixel = 0
+Scroll.ScrollBarThickness = 2
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 140)
+Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Scroll.Parent = Main
+
+local UIList = Instance.new("UIListLayout")
+UIList.Padding = UDim.new(0, 6)
+UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIList.Parent = Scroll
+
+--==================================================
+-- COMPACT HELPERS
+--==================================================
+
+local function CreateMiniSlider(Name, MinValue, MaxValue, DefaultValue, Callback)
+	local Container = Instance.new("Frame")
+	Container.Size = UDim2.new(1, -8, 0, 26)
+	Container.BackgroundTransparency = 1
+	Container.Parent = Scroll
+
+	local Label = Instance.new("TextLabel")
+	Label.Size = UDim2.new(0.6, 0, 0, 12)
+	Label.BackgroundTransparency = 1
+	Label.Text = Name
+	Label.TextColor3 = Color3.fromRGB(180, 180, 190)
+	Label.TextSize = 8
+	Label.Font = Enum.Font.GothamSemibold
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.Parent = Container
+
+	local ValueLabel = Instance.new("TextLabel")
+	ValueLabel.Size = UDim2.new(0.4, 0, 0, 12)
+	ValueLabel.Position = UDim2.new(0.6, 0, 0, 0)
+	ValueLabel.BackgroundTransparency = 1
+	ValueLabel.Text = tostring(DefaultValue)
+	ValueLabel.TextColor3 = Color3.fromRGB(120, 120, 130)
+	ValueLabel.TextSize = 8
+	ValueLabel.Font = Enum.Font.Gotham
+	ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+	ValueLabel.Parent = Container
+
+	local Bar = Instance.new("Frame")
+	Bar.Size = UDim2.new(1, 0, 0, 4)
+	Bar.Position = UDim2.fromOffset(0, 16)
+	Bar.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+	Bar.BorderSizePixel = 0
+	Bar.Parent = Container
+
+	local BarCorner = Instance.new("UICorner")
+	BarCorner.CornerRadius = UDim.new(1, 0)
+	BarCorner.Parent = Bar
+
+	local Normalized = (DefaultValue - MinValue) / (MaxValue - MinValue)
+	local Fill = Instance.new("Frame")
+	Fill.Size = UDim2.fromScale(Normalized, 1)
+	Fill.BackgroundColor3 = Color3.fromRGB(70, 120, 240)
+	Fill.BorderSizePixel = 0
+	Fill.Parent = Bar
+
+	local FillCorner = Instance.new("UICorner")
+	FillCorner.CornerRadius = UDim.new(1, 0)
+	FillCorner.Parent = Fill
+
+	local Dragging = false
+	local function SetValue(X)
+		local Percentage = math.clamp((X - Bar.AbsolutePosition.X) / Bar.AbsoluteSize.X, 0, 1)
+		local Value = math.round(MinValue + (MaxValue - MinValue) * Percentage)
+		local NewNorm = (Value - MinValue) / (MaxValue - MinValue)
+
+		Fill.Size = UDim2.fromScale(NewNorm, 1)
+		ValueLabel.Text = tostring(Value)
+		Callback(Value)
+	end
+
+	Bar.InputBegan:Connect(function(Input)
+		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+			Dragging = true
+			SetValue(Input.Position.X)
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(Input)
+		if Dragging and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
+			SetValue(Input.Position.X)
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(Input)
+		if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+			Dragging = false
+		end
+	end)
+end
+
+local function CreateMiniToggle(Name, DefaultValue, Callback)
+	local Button = Instance.new("TextButton")
+	Button.Size = UDim2.new(1, -8, 0, 20)
+	Button.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+	Button.BorderSizePixel = 0
+	Button.TextColor3 = Color3.fromRGB(180, 180, 190)
+	Button.TextSize = 8
+	Button.Font = Enum.Font.GothamSemibold
+	Button.Parent = Scroll
+
+	local Corner = Instance.new("UICorner")
+	Corner.CornerRadius = UDim.new(0, 4)
+	Corner.Parent = Button
+
+	local Enabled = DefaultValue
+	local function Update()
+		if Enabled then
+			Button.Text = Name .. ": ON"
+			Button.BackgroundColor3 = Color3.fromRGB(45, 80, 160)
+		else
+			Button.Text = Name .. ": OFF"
+			Button.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+		end
+		Callback(Enabled)
+	end
+
+	Button.MouseButton1Click:Connect(function()
+		Enabled = not Enabled
+		Update()
+	end)
+
+	Update()
+end
+
+-- Create UI Controls
+CreateMiniSlider("FOV", 20, 250, Settings.FOV, function(V) Settings.FOV = V end)
+CreateMiniSlider("Strength", 1, 50, Settings.AimStrength, function(V) Settings.AimStrength = V end)
+CreateMiniToggle("Wall Check", Settings.WallCheck, function(V) Settings.WallCheck = V end)
+CreateMiniToggle("Team Check", Settings.TeamCheck, function(V) Settings.TeamCheck = V end)
+
+local function UpdateAimButton()
+	if Settings.Enabled then
+		AimButton.Text = "ENABLED"
+		AimButton.BackgroundColor3 = Color3.fromRGB(45, 80, 160)
+		AimButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	else
+		AimButton.Text = "DISABLED"
+		AimButton.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+		AimButton.TextColor3 = Color3.fromRGB(180, 180, 190)
+	end
+end
+
+AimButton.MouseButton1Click:Connect(function()
+	Settings.Enabled = not Settings.Enabled
+	UpdateAimButton()
+end)
+
+GuiToggle.MouseButton1Click:Connect(function()
+	Main.Visible = not Main.Visible
+end)
+
+--==================================================
+-- FOV CIRCLE
+--==================================================
+
+local FOVCircle = Instance.new("Frame")
+FOVCircle.Name = "FOVCircle"
+FOVCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+FOVCircle.Position = UDim2.fromScale(0.5, 0.5)
+FOVCircle.Size = UDim2.fromOffset(Settings.FOV * 2, Settings.FOV * 2)
+FOVCircle.BackgroundTransparency = 1
+FOVCircle.Visible = false
+FOVCircle.Parent = Gui
+
+local CircleCorner = Instance.new("UICorner")
+CircleCorner.CornerRadius = UDim.new(1, 0)
+CircleCorner.Parent = FOVCircle
+
+local CircleStroke = Instance.new("UIStroke")
+CircleStroke.Thickness = 1
+CircleStroke.Transparency = 0.4
+CircleStroke.Color = Color3.fromRGB(90, 140, 255)
+CircleStroke.Parent = FOVCircle
+
+--==================================================
+-- VALIDATION CHECKS
+--==================================================
+
+local function IsAlive(Character)
+	if not Character then return false end
+	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+	if not Humanoid or (Settings.DeadCheck and Humanoid.Health <= 0) then
+		return false
+	end
+	return true
+end
+
+local function HasLineOfSight(Character, TargetPart)
+	if not Settings.WallCheck then return true end
+	local LocalCharacter = LocalPlayer.Character
+	if not LocalCharacter then return false end
+
+	local Camera = workspace.CurrentCamera
+	if not Camera then return false end
+
+	local Origin = Camera.CFrame.Position
+	local Direction = TargetPart.Position - Origin
+
+	local Params = RaycastParams.new()
+	Params.FilterType = Enum.RaycastFilterType.Exclude
+	Params.FilterDescendantsInstances = { LocalCharacter }
+
+	local Result = workspace:Raycast(Origin, Direction, Params)
+	if not Result then return true end
+
+	return Result.Instance:IsDescendantOf(Character)
+end
+
+--==================================================
+-- TARGETING SYSTEM
+--==================================================
+
+local function GetClosestPlayer()
+	local Camera = workspace.CurrentCamera
+	if not Camera then return nil end
+
+	local Closest = nil
+	local ClosestDistance = math.huge
+	local Center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+	for _, TargetPlayer in ipairs(Players:GetPlayers()) do
+		if TargetPlayer == LocalPlayer then continue end
+
+		if Settings.TeamCheck and TargetPlayer.Team == LocalPlayer.Team then
+			continue
+		end
+
+		local Character = TargetPlayer.Character
+		if not Character or not IsAlive(Character) then continue end
+
+		local TargetPart = Character:FindFirstChild(Settings.TargetPart) or Character:FindFirstChild("HumanoidRootPart")
+		if not TargetPart then continue end
+
+		local Distance = (TargetPart.Position - Camera.CFrame.Position).Magnitude
+		if Distance > Settings.MaxDistance then continue end
+
+		local ScreenPosition, OnScreen = Camera:WorldToViewportPoint(TargetPart.Position)
+		if not OnScreen or ScreenPosition.Z <= 0 then continue end
+
+		local ScreenPoint = Vector2.new(ScreenPosition.X, ScreenPosition.Y)
+		local ScreenDistance = (ScreenPoint - Center).Magnitude
+
+		if ScreenDistance > Settings.FOV then continue end
+
+		if not HasLineOfSight(Character, TargetPart) then continue end
+
+		if ScreenDistance < ClosestDistance then
+			ClosestDistance = ScreenDistance
+			Closest = TargetPart
+		end
+	end
+
+	return Closest
+end
+
+--==================================================
+-- FPS-COMPATIBLE AIM ROTATION
+--==================================================
+
+local function AimAt(Target)
+	local Camera = workspace.CurrentCamera
+	if not Camera or not Target or not Target.Parent then return end
+
+	local CameraCFrame = Camera.CFrame
+	local TargetPosition = Target.Position
+
+	-- Calculate vector to target
+	local Direction = (TargetPosition - CameraCFrame.Position).Unit
+
+	-- Determine target LookVector and interpolate towards it
+	local DesiredCFrame = CFrame.lookAt(CameraCFrame.Position, CameraCFrame.Position + Direction)
+
+	-- Apply smooth interpolation without overriding base positions
+	local Smoothness = math.clamp(Settings.AimStrength / 100, 0.01, 1)
+	Camera.CFrame = CameraCFrame:Lerp(DesiredCFrame, Smoothness)
+end
+
+--==================================================
+-- MAIN LOOP (RenderStepped & Key Bindings)
+--==================================================
+
+UserInputService.InputBegan:Connect(function(Input, Processed)
+	if Processed then return end
+	if Input.KeyCode == Settings.ToggleKey then
+		Settings.Enabled = not Settings.Enabled
+		UpdateAimButton()
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	FOVCircle.Size = UDim2.fromOffset(Settings.FOV * 2, Settings.FOV * 2)
+	FOVCircle.Visible = Settings.Enabled
+
+	if not Settings.Enabled then return end
+
+	local Target = GetClosestPlayer()
+	if Target then
+		AimAt(Target)
+	end
+end)
